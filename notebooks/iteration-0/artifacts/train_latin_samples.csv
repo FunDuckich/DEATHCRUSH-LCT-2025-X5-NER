@@ -1,0 +1,11 @@
+sample,annotation,query_len_char,query_len_token,contains_latin
+дрожжи nord,"[(0, 6, 'B-TYPE'), (7, 11, 'B-BRAND')]",11,2,True
+j7￼,"[(0, 3, 'B-BRAND')]",3,1,True
+бренди torre,"[(0, 6, 'B-TYPE'), (7, 12, 'B-BRAND')]",12,2,True
+altero,"[(0, 6, 'B-BRAND')]",6,1,True
+milkyve,"[(0, 7, 'B-BRAND')]",7,1,True
+груша papadimitri,"[(0, 5, 'B-TYPE'), (6, 17, 'B-BRAND')]",17,2,True
+l.g,"[(0, 3, 'O')]",3,1,True
+beker,"[(0, 5, 'B-BRAND')]",5,1,True
+exxe порошк,"[(0, 4, 'B-BRAND'), (5, 11, 'B-TYPE')]",11,2,True
+bushido,"[(0, 7, 'B-BRAND')]",7,1,True
