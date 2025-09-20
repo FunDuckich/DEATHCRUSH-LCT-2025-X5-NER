@@ -3,6 +3,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+/data/external/embeddings/ru_en_aligned.pkl
+
 # C extensions
 *.so
 
