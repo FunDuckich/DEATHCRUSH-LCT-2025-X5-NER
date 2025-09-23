@@ -64,86 +64,46 @@ def indices_to_bio(text: str, annotations: list) -> tuple[list[str], list[str]]:
 
 
 def bio_to_indices(text: str, bio_tags: list) -> list:
-    """
-    Преобразует BIO-теги в список аннотаций (start, end, label) на основе символьных индексов.
-    Сохраняет исходный B/I префикс первого токена сущности.
-    """
     if tokenizer is None:
         raise RuntimeError("Токенизатор не был инициализирован.")
 
-    # ... (весь код токенизации и выравнивания остается тем же) ...
-    encoding = tokenizer(
-        text,
-        return_offsets_mapping=True,
-        add_special_tokens=True,
-    )
-    all_tokens = tokenizer.convert_ids_to_tokens(encoding["input_ids"])
-    all_offsets = encoding["offset_mapping"]
+    encoding = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+    offsets = encoding["offset_mapping"]
 
-    valid_mask = [off != (0, 0) for off in all_offsets]
-
-    filtered_offsets = [tuple(map(int, off)) for off, m in zip(all_offsets, valid_mask) if m]
-
-    if len(bio_tags) == len(filtered_offsets):
-        tags_aligned = list(bio_tags)
-    elif len(bio_tags) == len(all_tokens):
-        tags_aligned = [tag for tag, m in zip(bio_tags, valid_mask) if m]
-    else:
-        # ... (код обработки ошибок остается) ...
+    if len(bio_tags) != len(offsets):
         raise ValueError(
-            "Количество BIO-тегов не совпадает..."
+            f"Рассинхронизация токенизации: количество BIO-тегов ({len(bio_tags)}) "
+            f"не совпадает с количеством токенов ({len(offsets)})."
         )
 
-    # --- НАЧАЛО ИЗМЕНЕНИЙ ---
+    annotations = []
+    i = 0
+    while i < len(bio_tags):
+        tag = bio_tags[i]
 
-    annotations: list[tuple[int, int, str]] = []
+        if tag == 'O':
+            start_char, end_char = offsets[i]
+            annotations.append((start_char, end_char, 'O'))
+            i += 1
+        elif tag.startswith('B-'):
+            entity_label = tag[2:]
+            start_token_idx = i
+            end_token_idx = i
 
-    current_entity_tags = []
-    current_entity_indices = []
+            j = i + 1
+            while j < len(bio_tags) and bio_tags[j] == f"I-{entity_label}":
+                end_token_idx = j
+                j += 1
 
-    for i, tag in enumerate(tags_aligned):
-        if tag.startswith("B-"):
-            # Если уже есть открытая сущность, закрываем ее
-            if current_entity_tags:
-                start_char = filtered_offsets[current_entity_indices[0]][0]
-                end_char = filtered_offsets[current_entity_indices[-1]][1]
-                # Используем первый тег как основной
-                annotations.append((start_char, end_char, current_entity_tags[0]))
+            start_char = offsets[start_token_idx][0]
+            end_char = offsets[end_token_idx][1]
 
-            # Начинаем новую сущность
-            current_entity_tags = [tag]
-            current_entity_indices = [i]
+            annotations.append((start_char, end_char, tag))
 
-        elif tag.startswith("I-"):
-            # Если есть открытая сущность и теги совпадают, продолжаем
-            if current_entity_tags and tag[2:] == current_entity_tags[0][2:]:
-                current_entity_tags.append(tag)
-                current_entity_indices.append(i)
-            else:
-                # Некорректный I-тег или нет открытой сущности, закрываем старую и начинаем новую
-                if current_entity_tags:
-                    start_char = filtered_offsets[current_entity_indices[0]][0]
-                    end_char = filtered_offsets[current_entity_indices[-1]][1]
-                    annotations.append((start_char, end_char, current_entity_tags[0]))
+            i = j
+        else:
+            start_char, end_char = offsets[i]
+            annotations.append((start_char, end_char, 'O'))
+            i += 1
 
-                # Начинаем новую сущность с этого I-тега (восстановление после ошибки)
-                current_entity_tags = [f"B-{tag[2:]}"]  # Превращаем I- в B-
-                current_entity_indices = [i]
-
-        else:  # Тег 'O' или другой
-            # Закрываем любую открытую сущность
-            if current_entity_tags:
-                start_char = filtered_offsets[current_entity_indices[0]][0]
-                end_char = filtered_offsets[current_entity_indices[-1]][1]
-                annotations.append((start_char, end_char, current_entity_tags[0]))
-
-            current_entity_tags = []
-            current_entity_indices = []
-
-    # Не забываем закрыть последнюю сущность, если она была
-    if current_entity_tags:
-        start_char = filtered_offsets[current_entity_indices[0]][0]
-        end_char = filtered_offsets[current_entity_indices[-1]][1]
-        annotations.append((start_char, end_char, current_entity_tags[0]))
-
-    return annotations
+    return sorted(annotations, key=lambda x: x[0])
