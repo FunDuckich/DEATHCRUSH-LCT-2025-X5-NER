@@ -15,7 +15,7 @@ PROCESSED_VAL_PATH = "data/processed/validation_bio.csv"
 
 
 def fix_zero_tags(annotations: list) -> list:
-    return [(start, end, 'O' if label == '0' else label) for start, end, label in annotations]
+    return [(start, end, "O" if label == "0" else label) for start, end, label in annotations]
 
 
 def main():
@@ -29,8 +29,8 @@ def main():
         return
 
     print("Шаг 2: Исправление ошибочных тегов ('0' -> 'O')...")
-    original_zeros = sum(1 for annotations in df['annotation'] for _, _, label in annotations if label == '0')
-    df['annotation'] = df['annotation'].apply(fix_zero_tags)
+    original_zeros = sum(1 for annotations in df["annotation"] for _, _, label in annotations if label == "0")
+    df["annotation"] = df["annotation"].apply(fix_zero_tags)
     print(f"Исправлено {original_zeros} ошибочных тегов.")
 
     print("Шаг 3: Очистка аннотаций...")
@@ -50,10 +50,33 @@ def main():
     df_bio = df_bio[["sample", "tokens", "tags"]]
     print("Преобразование успешно завершено.")
 
-    print("Шаг 5: Разделение на обучающую и валидационную выборки (85/15)...")
-    train_df, val_df = train_test_split(df_bio, test_size=0.15, random_state=42)
-    print(f"Размер обучающей выборки: {len(train_df)}")
-    print(f"Размер валидационной выборки: {len(val_df)}")
+    print("\n--- Шаг 5: Выполнение 'умного' стратифицированного разбиения (85/15) ---")
+
+    def has_rare_class(tags):
+        return any(t.endswith("VOLUME") or t.endswith("PERCENT") for t in tags)
+
+    df_bio["is_rare"] = df_bio["tags"].apply(has_rare_class)
+
+    df_rare = df_bio[df_bio["is_rare"] == True]
+    df_common = df_bio[df_bio["is_rare"] == False]
+
+    print(f"Найдено {len(df_rare)} примеров с редкими классами и {len(df_common)} обычных.")
+
+    train_rare, val_rare = train_test_split(df_rare, test_size=0.15, random_state=42)
+    train_common, val_common = train_test_split(df_common, test_size=0.15, random_state=42)
+
+    train_df = pd.concat([train_common, train_rare]).sample(frac=1, random_state=42)
+    val_df = pd.concat([val_common, val_rare]).sample(frac=1, random_state=42)
+
+    train_df = train_df.drop(columns=["is_rare"])
+    val_df = val_df.drop(columns=["is_rare"])
+
+    print("Разбиение успешно завершено.")
+    print(f"  Размер итоговой обучающей выборки: {len(train_df)}")
+    print(f"  Размер итоговой валидационной выборки: {len(val_df)}")
+
+    val_rare_count = val_df["tags"].apply(has_rare_class).sum()
+    print(f"  Количество примеров с редкими классами в итоговой валидации: {val_rare_count}.")
 
     print("Шаг 6: Сохранение обработанных данных...")
     train_df.to_csv(PROCESSED_TRAIN_PATH, sep=";", index=False)
